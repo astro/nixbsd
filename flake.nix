@@ -44,6 +44,41 @@
       nixosConfigurations =
         lib.mapAttrs (name: _: makeSystem name (configBase + "/${name}"))
         (builtins.readDir configBase);
+
+      hydraJobs = {
+        inherit (self) packages;
+
+        freebsd =
+          let
+            pkgs = import nixpkgs {
+              localSystem = "x86_64-linux";
+              crossSystem = "x86_64-freebsd";
+              config.freebsdBranch = "releng/14.0";
+           };
+          in
+            builtins.mapAttrs (_: pkg: {
+              x86_64-linux = nixpkgs.lib.hydraJob pkg;
+            }) (
+              lib.filterAttrs (_: lib.isDerivation) pkgs.freebsd
+            );
+
+        netbsd =
+          let
+            pkgs = import nixpkgs {
+              localSystem = "x86_64-linux";
+              crossSystem = "x86_64-netbsd";
+           };
+          in
+            builtins.mapAttrs (_: pkg: {
+              x86_64-linux = nixpkgs.lib.hydraJob pkg;
+            }) (
+              lib.filterAttrs (_: lib.isDerivation) pkgs.netbsd
+            );
+
+      } // lib.mapAttrs (_: sys: {
+        ${sys.config.nixpkgs.buildPlatform.system} = lib.hydraJob sys.config.system.build.toplevel;
+      }) self.nixosConfigurations;
+
     } // (utils.lib.eachSystem supportedSystems (system:
       let
         makeImage = conf:
